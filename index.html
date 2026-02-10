@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MI Public University Comparator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div class="logo-row">
+          <img
+            src="gvsu-logo.png"
+            alt="Grand Valley State University logo"
+            class="logo"
+          />
+        </div>
+        <h1>MI Public University Comparator</h1>
+        <p class="disclaimer">
+          <strong>Disclaimer: This app was built with OpenAI GPT 5.2 Codex. Please confirm all data before use.</strong>
+        </p>
+      </header>
+
+      <section class="card">
+        <h2>1. Load CSV</h2>
+        <p class="muted">Select your IPEDS CSV file to begin.</p>
+        <div class="row">
+          <input id="csvInput" type="file" accept=".csv" />
+          <button id="loadBtn" class="primary">Load CSV</button>
+        </div>
+        <div id="loadStatus" class="status"></div>
+      </section>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <section class="card selection-card">
+            <div class="selection-header">
+              <div>
+                <div class="chart-title">Institutions</div>
+                <div class="muted">Toggle the schools included in the chart/table.</div>
+              </div>
+              <div class="selection-actions">
+                <button id="selectAllBtn" type="button">Select all</button>
+                <button id="selectNoneBtn" type="button">Select none</button>
+              </div>
+            </div>
+            <div id="institutionList" class="institution-list"></div>
+          </section>
+        </aside>
+
+        <main class="content">
+          <section class="card">
+            <h2>2. Compare Metrics</h2>
+            <div class="controls">
+              <label>
+                Metric
+                <select id="metricSelect" disabled></select>
+              </label>
+              <label>
+                Sort
+                <select id="sortSelect" disabled>
+                  <option value="name">Institution name</option>
+                  <option value="value">Latest value (numeric)</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="card definition-card">
+              <div class="chart-title" id="definitionTitle">Metric definition</div>
+              <p class="muted" id="definitionBody">
+                Select a metric to see the IPEDS definition.
+              </p>
+              <div class="definition-source" id="definitionSource"></div>
+            </div>
+
+            <div class="card chart-card">
+              <div class="chart-header">
+                <div>
+                  <div class="chart-title" id="chartTitle">Metric trend</div>
+                  <div class="muted" id="chartSubtitle"></div>
+                </div>
+                <div class="muted" id="chartNote">Hover points to see exact values.</div>
+              </div>
+              <div class="chart-wrap">
+                <canvas id="trendChart" width="1000" height="320"></canvas>
+                <div id="chartTooltip" class="chart-tooltip"></div>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table id="resultTable">
+                <thead></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
