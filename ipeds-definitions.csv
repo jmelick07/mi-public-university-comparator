@@ -1,0 +1,17 @@
+metric_group,definition,source
+Admission Rate,Share of applicants who were admitted. Computed as admissions divided by applications.,IPEDS ADM
+Admissions Yield,Share of admitted students who enrolled. Computed as enrolled divided by admissions.,IPEDS ADM
+Applications,Total number of undergraduate applications received.,IPEDS ADM
+Admissions,Total number of applicants admitted.,IPEDS ADM
+Enrolled,Number of admitted students who enrolled (used for admissions yield).,IPEDS ADM
+Enrollment Total,Total fall enrollment headcount.,"IPEDS EF (EFALEVEL=1, EFTOTLT)"
+Full-Time Retention Rate,"Percent of first-time, full-time undergraduates who return the following fall.",IPEDS EF
+Graduation Rate - Bachelor Degree Within 6 Years,"Share of the first-time, full-time cohort completing a bachelor degree within 150% of normal time (typically 6 years).",IPEDS GR (derived from cohort/completion counts)
+Graduation Rate - Bachelor Degree Within 4 Years,"Share of the first-time, full-time cohort completing a bachelor degree within 4 years.",IPEDS GR (derived from cohort/completion counts)
+Graduation Rate - Bachelor Degree Within 5 Years,"Share of the first-time, full-time cohort completing a bachelor degree within 5 years (cumulative).",IPEDS GR (derived from cohort/completion counts)
+Percent Receiving Pell Grant,Percent of relevant students receiving Pell Grant aid.,IPEDS SFA (PGRNT_P / UPGRNTP)
+Average Amount of Pell Grant Aid,Average Pell Grant dollars among Pell recipients.,IPEDS SFA (PGRNT_A / UPGRNTA)
+Average Amount of Student Loans,Average federal loan dollars among student loan recipients.,IPEDS SFA (LOAN_A / FLOAN_A / UFLOANA)
+Student-Faculty Ratio,Student-to-faculty ratio reported by the institution.,IPEDS EF (STUFACR)
+Scorecard Median Earnings 6 Years After Entry Latest Snapshot,Latest non-suppressed median earnings for former students measured 6 years after entry.,College Scorecard MERGED files (MD_EARN_WNE_P6)
+Scorecard Median Earnings 10 Years After Entry Latest Snapshot,Latest non-suppressed median earnings for former students measured 10 years after entry.,College Scorecard MERGED files (MD_EARN_WNE_P10)

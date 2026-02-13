@@ -14,6 +14,8 @@ const selectNoneBtn = document.getElementById("selectNoneBtn");
 const definitionTitle = document.getElementById("definitionTitle");
 const definitionBody = document.getElementById("definitionBody");
 const definitionSource = document.getElementById("definitionSource");
+const DEFAULT_CSV_URL =
+  "https://github.com/jmelick07/mi-public-university-comparator/blob/main/ipeds_mi_public_10yr_metrics_wide_comparator_clean.csv";
 
 const state = {
   header: [],
@@ -24,6 +26,7 @@ const state = {
   selectedInstitutions: new Set(),
   hoverSeries: null,
   lastChart: null,
+  definitions: new Map(),
 };
 
 const SCHOOL_COLORS = {
@@ -73,6 +76,73 @@ const FALLBACK_COLORS = [
   "#5F6C7B",
 ];
 
+const EMBEDDED_DEFINITIONS = {
+  "admission rate": {
+    text: "Share of applicants who were admitted. Computed as admissions divided by applications.",
+    source: "IPEDS ADM",
+  },
+  "admissions yield": {
+    text: "Share of admitted students who enrolled. Computed as enrolled divided by admissions.",
+    source: "IPEDS ADM",
+  },
+  applications: {
+    text: "Total number of undergraduate applications received.",
+    source: "IPEDS ADM",
+  },
+  admissions: {
+    text: "Total number of applicants admitted.",
+    source: "IPEDS ADM",
+  },
+  enrolled: {
+    text: "Number of admitted students who enrolled (used for admissions yield).",
+    source: "IPEDS ADM",
+  },
+  "enrollment total": {
+    text: "Total fall enrollment headcount.",
+    source: "IPEDS EF (EFALEVEL=1, EFTOTLT)",
+  },
+  "full time retention rate": {
+    text: "Percent of first-time, full-time undergraduates who return the following fall.",
+    source: "IPEDS EF",
+  },
+  "graduation rate bachelor degree within 6 years": {
+    text: "Share of the first-time, full-time cohort completing a bachelor degree within 150% of normal time (typically 6 years).",
+    source: "IPEDS GR (derived from cohort/completion counts)",
+  },
+  "graduation rate bachelor degree within 4 years": {
+    text: "Share of the first-time, full-time cohort completing a bachelor degree within 4 years.",
+    source: "IPEDS GR (derived from cohort/completion counts)",
+  },
+  "graduation rate bachelor degree within 5 years": {
+    text: "Share of the first-time, full-time cohort completing a bachelor degree within 5 years (cumulative).",
+    source: "IPEDS GR (derived from cohort/completion counts)",
+  },
+  "percent receiving pell grant": {
+    text: "Percent of relevant students receiving Pell Grant aid.",
+    source: "IPEDS SFA (PGRNT_P / UPGRNTP)",
+  },
+  "average amount of pell grant aid": {
+    text: "Average Pell Grant dollars among Pell recipients.",
+    source: "IPEDS SFA (PGRNT_A / UPGRNTA)",
+  },
+  "average amount of student loans": {
+    text: "Average federal loan dollars among student loan recipients.",
+    source: "IPEDS SFA (LOAN_A / FLOAN_A / UFLOANA)",
+  },
+  "student faculty ratio": {
+    text: "Student-to-faculty ratio reported by the institution.",
+    source: "IPEDS EF (STUFACR)",
+  },
+  "scorecard median earnings 6 years after entry latest snapshot": {
+    text: "Latest non-suppressed median earnings for former students measured 6 years after entry.",
+    source: "College Scorecard MERGED files (MD_EARN_WNE_P6)",
+  },
+  "scorecard median earnings 10 years after entry latest snapshot": {
+    text: "Latest non-suppressed median earnings for former students measured 10 years after entry.",
+    source: "College Scorecard MERGED files (MD_EARN_WNE_P10)",
+  },
+};
+
 loadBtn.addEventListener("click", () => {
   if (!csvInput.files.length) {
     setStatus("Please select a CSV file first.", true);
@@ -110,6 +180,7 @@ trendChart.addEventListener("mouseleave", () => {
 window.addEventListener("resize", () => {
   if (state.lastChart) drawChart(trendChart, state.lastChart.years, state.lastChart.series);
 });
+autoLoadFromDefaultSource();
 
 function setStatus(message, isError = false) {
   loadStatus.textContent = message;
@@ -120,37 +191,71 @@ function loadCSV(file) {
   setStatus("Loading CSV...");
   const reader = new FileReader();
   reader.onload = () => {
-    const text = reader.result;
-    const { header, rows } = parseCSV(text);
-    if (!header.length) {
-      setStatus("CSV appears empty or unreadable.", true);
-      return;
-    }
-    state.header = header;
-    state.rows = rows;
-    state.metricMap = buildMetricMap(header);
-    state.metrics = Array.from(state.metricMap.keys()).sort((a, b) =>
-      a.localeCompare(b)
-    );
-    state.selectedInstitutions = new Set(rows.map((row) => row.instnm));
-
-    populateMetricSelect();
-    renderInstitutionList();
-
-    metricSelect.disabled = false;
-    sortSelect.disabled = false;
-
-    state.selectedBase = state.metrics[0] || "";
-    metricSelect.value = state.selectedBase;
-    updateDefinition();
-
-    setStatus(
-      `Loaded ${rows.length} institutions and ${state.metrics.length} metric groups.`
-    );
-    renderAll();
+    initializeDataset(reader.result);
   };
   reader.onerror = () => setStatus("Failed to read CSV.", true);
   reader.readAsText(file);
+}
+
+async function loadCSVFromUrl(url) {
+  const resolved = toRawGitHubUrl(url);
+  setStatus("Loading CSV from configured source...");
+  try {
+    const response = await fetch(resolved, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const text = await response.text();
+    initializeDataset(text);
+  } catch (err) {
+    setStatus(
+      "Auto-load failed. Use the file picker to load a CSV manually.",
+      true
+    );
+  }
+}
+
+function initializeDataset(text) {
+  const { header, rows } = parseCSV(text);
+  if (!header.length) {
+    setStatus("CSV appears empty or unreadable.", true);
+    return;
+  }
+  state.header = header;
+  state.rows = rows;
+  state.metricMap = buildMetricMap(header);
+  state.metrics = Array.from(state.metricMap.keys()).sort((a, b) =>
+    a.localeCompare(b)
+  );
+  state.selectedInstitutions = new Set(rows.map((row) => row.instnm));
+
+  populateMetricSelect();
+  renderInstitutionList();
+
+  metricSelect.disabled = false;
+  sortSelect.disabled = false;
+
+  state.selectedBase = state.metrics[0] || "";
+  metricSelect.value = state.selectedBase;
+  loadDefinitions().finally(updateDefinition);
+
+  setStatus(
+    `Loaded ${rows.length} institutions and ${state.metrics.length} metric groups.`
+  );
+  renderAll();
+}
+
+function toRawGitHubUrl(url) {
+  if (!url) return url;
+  if (url.includes("raw.githubusercontent.com")) return url;
+  return url
+    .replace("https://github.com/", "https://raw.githubusercontent.com/")
+    .replace("/blob/", "/");
+}
+
+function autoLoadFromDefaultSource() {
+  if (!DEFAULT_CSV_URL) return;
+  loadCSVFromUrl(DEFAULT_CSV_URL);
 }
 
 function parseCSV(text) {
@@ -446,8 +551,12 @@ function drawChart(canvas, years, series) {
   const values = series.flatMap((s) => s.values).filter((v) => v > -Infinity);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = max - min || 1;
   const nice = niceScale(min, max, 5);
+
+  if (years.length === 1) {
+    drawSingleYearBars(canvas, ctx, years, series, padding, chartWidth, chartHeight, nice);
+    return;
+  }
 
   ctx.strokeStyle = "#e3d9cc";
   ctx.lineWidth = 1;
@@ -511,6 +620,7 @@ function drawChart(canvas, years, series) {
   });
 
   ctx.globalAlpha = 1;
+  canvas.dataset.mode = "line";
   canvas.dataset.years = JSON.stringify(years);
   canvas.dataset.series = JSON.stringify(
     series.map((s) => ({ name: s.name, values: s.values }))
@@ -522,6 +632,11 @@ function drawChart(canvas, years, series) {
 }
 
 function onChartHover(event) {
+  const mode = trendChart.dataset.mode || "line";
+  if (mode === "bar") {
+    return onBarChartHover(event);
+  }
+
   const years = JSON.parse(trendChart.dataset.years || "[]");
   const series = JSON.parse(trendChart.dataset.series || "[]");
   if (!years.length || !series.length) return;
@@ -589,6 +704,149 @@ function onChartHover(event) {
   }
 }
 
+function drawSingleYearBars(canvas, ctx, years, series, padding, chartWidth, chartHeight, nice) {
+  const bottomY = padding.top + chartHeight;
+  const domain = nice.max - nice.min || 1;
+  const year = years[0];
+
+  ctx.strokeStyle = "#e3d9cc";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding.left, padding.top);
+  ctx.lineTo(padding.left, bottomY);
+  ctx.lineTo(padding.left + chartWidth, bottomY);
+  ctx.stroke();
+
+  const steps = nice.steps;
+  ctx.fillStyle = "#5a6678";
+  ctx.font = "12px Inter, sans-serif";
+  for (let i = 0; i <= steps; i += 1) {
+    const value = nice.max - nice.step * i;
+    const y = padding.top + (chartHeight * i) / steps;
+    const formatted = formatValue(value, state.selectedBase, {
+      numericInput: true,
+    });
+    ctx.fillText(formatted, 6, y + 4);
+    ctx.strokeStyle = "#f0e5d6";
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(padding.left + chartWidth, y);
+    ctx.stroke();
+  }
+
+  const valid = series
+    .map((s, sIdx) => ({ s, sIdx, value: s.values[0] }))
+    .filter((row) => row.value !== -Infinity);
+  const count = Math.max(valid.length, 1);
+  const slot = chartWidth / count;
+  const barWidth = Math.max(8, slot * 0.62);
+  const bars = [];
+
+  valid.forEach((row, idx) => {
+    const xCenter = padding.left + slot * idx + slot / 2;
+    const y = padding.top + ((nice.max - row.value) / domain) * chartHeight;
+    const h = Math.max(1, bottomY - y);
+    const x = xCenter - barWidth / 2;
+    const color = colorForInstitution(row.s.name);
+    const isHover = state.hoverSeries === row.sIdx;
+
+    ctx.fillStyle = color;
+    ctx.globalAlpha = state.hoverSeries === null || isHover ? 0.92 : 0.22;
+    ctx.fillRect(x, y, barWidth, h);
+
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = state.hoverSeries === null || isHover ? 1 : 0.25;
+    ctx.lineWidth = isHover ? 2 : 1;
+    ctx.strokeRect(x, y, barWidth, h);
+
+    const code = SCHOOL_CODES[row.s.name] || row.s.name;
+    ctx.fillStyle = "#5a6678";
+    ctx.globalAlpha = 1;
+    ctx.font = "10px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(code, xCenter, bottomY + 14);
+    ctx.textAlign = "left";
+
+    bars.push({
+      sIdx: row.sIdx,
+      year,
+      value: row.value,
+      x,
+      y,
+      w: barWidth,
+      h,
+      centerX: xCenter,
+    });
+  });
+
+  ctx.globalAlpha = 1;
+  canvas.dataset.mode = "bar";
+  canvas.dataset.years = JSON.stringify(years);
+  canvas.dataset.series = JSON.stringify(
+    series.map((s) => ({ name: s.name, values: s.values }))
+  );
+  canvas.dataset.min = String(nice.min);
+  canvas.dataset.max = String(nice.max);
+  canvas.dataset.range = String(domain);
+  canvas.dataset.padding = JSON.stringify(padding);
+  canvas.dataset.bars = JSON.stringify(bars);
+}
+
+function onBarChartHover(event) {
+  const bars = JSON.parse(trendChart.dataset.bars || "[]");
+  const series = JSON.parse(trendChart.dataset.series || "[]");
+  if (!bars.length || !series.length) return;
+
+  const rect = trendChart.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * trendChart.width;
+  const y = ((event.clientY - rect.top) / rect.height) * trendChart.height;
+
+  let closest = null;
+  bars.forEach((bar) => {
+    const withinX = x >= bar.x - 6 && x <= bar.x + bar.w + 6;
+    if (!withinX) return;
+    const dist = Math.abs(x - bar.centerX) + Math.abs(y - (bar.y + bar.h * 0.35)) * 0.2;
+    if (!closest || dist < closest.dist) {
+      closest = { ...bar, dist };
+    }
+  });
+
+  if (closest) {
+    state.hoverSeries = closest.sIdx;
+    if (state.lastChart) drawChart(trendChart, state.lastChart.years, state.lastChart.series);
+
+    const name = series[closest.sIdx].name;
+    const code = SCHOOL_CODES[name] || name;
+    const tooltipText = `${code} • ${closest.year}: ${formatValue(
+      closest.value,
+      state.selectedBase,
+      { numericInput: true }
+    )}`;
+    chartTooltip.textContent = tooltipText;
+    chartTooltip.style.display = "block";
+
+    const offsetX = (closest.centerX / trendChart.width) * rect.width;
+    const offsetY = (closest.y / trendChart.height) * rect.height;
+    chartTooltip.style.left = `${offsetX}px`;
+    chartTooltip.style.top = `${offsetY}px`;
+
+    const tooltipRect = chartTooltip.getBoundingClientRect();
+    const minLeft = 8;
+    const maxLeft = rect.width - tooltipRect.width - 8;
+    let left = offsetX - tooltipRect.width / 2;
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+
+    let top = offsetY - tooltipRect.height - 12;
+    if (top < 8) top = offsetY + 10;
+
+    chartTooltip.style.transform = `translate(${left - offsetX}px, ${top - offsetY}px)`;
+  } else {
+    state.hoverSeries = null;
+    chartTooltip.style.display = "none";
+    if (state.lastChart) drawChart(trendChart, state.lastChart.years, state.lastChart.series);
+  }
+}
+
 function throttle(fn, wait) {
   let lastTime = 0;
   let timeout = null;
@@ -629,7 +887,8 @@ function formatValue(value, base, opts = {}) {
     lower.includes("rate") ||
     lower.includes("yield")
   ) {
-    return `${num}%`;
+    const pct = num <= 1 ? num * 100 : num;
+    return `${pct.toFixed(2)}%`;
   }
 
   if (
@@ -700,7 +959,7 @@ function updateDefinition() {
     definitionSource.textContent = def.source || "IPEDS definition";
   } else {
     definitionBody.textContent =
-      "Definition not found in the current lookup set.";
+      "Definition not found. Add an IPEDS data dictionary file to enable full definitions.";
     definitionSource.textContent = "IPEDS";
   }
 }
@@ -708,6 +967,21 @@ function updateDefinition() {
 function getDefinition(base) {
   if (!base) return null;
   const lower = base.toLowerCase();
+  const normalizedBase = normalizeMetricKey(base);
+
+  const columnKey = getRepresentativeColumn(base);
+  if (columnKey && state.definitions.has(columnKey)) {
+    return state.definitions.get(columnKey);
+  }
+  if (state.definitions.has(base)) {
+    return state.definitions.get(base);
+  }
+  if (state.definitions.has(normalizedBase)) {
+    return state.definitions.get(normalizedBase);
+  }
+
+  const embedded = getEmbeddedDefinition(base);
+  if (embedded) return embedded;
 
   if (lower.startsWith("percent admitted")) {
     return {
@@ -766,4 +1040,150 @@ function getDefinition(base) {
   }
 
   return null;
+}
+
+function getEmbeddedDefinition(base) {
+  const normalized = normalizeMetricKey(base);
+  if (EMBEDDED_DEFINITIONS[normalized]) {
+    return EMBEDDED_DEFINITIONS[normalized];
+  }
+
+  const matchers = [
+    { re: /\bpercent admitted\b|\badmission rate\b/, key: "admission rate" },
+    { re: /\badmissions yield\b/, key: "admissions yield" },
+    { re: /\bapplications\b/, key: "applications" },
+    { re: /\badmissions\b/, key: "admissions" },
+    { re: /\benrolled\b/, key: "enrolled" },
+    { re: /\benrollment total\b|\btotal enrollment\b/, key: "enrollment total" },
+    { re: /\bfull time retention rate\b/, key: "full time retention rate" },
+    { re: /\bwithin 6 years\b/, key: "graduation rate bachelor degree within 6 years" },
+    { re: /\bwithin 4 years\b/, key: "graduation rate bachelor degree within 4 years" },
+    { re: /\bwithin 5 years\b/, key: "graduation rate bachelor degree within 5 years" },
+    { re: /\bpercent receiving pell grant\b/, key: "percent receiving pell grant" },
+    { re: /\baverage amount of pell grant aid\b/, key: "average amount of pell grant aid" },
+    { re: /\baverage amount of student loans\b/, key: "average amount of student loans" },
+    { re: /\bstudent faculty ratio\b|\bstudent-faculty ratio\b/, key: "student faculty ratio" },
+    { re: /\bmedian earnings 6 years after entry\b/, key: "scorecard median earnings 6 years after entry latest snapshot" },
+    { re: /\bmedian earnings 10 years after entry\b/, key: "scorecard median earnings 10 years after entry latest snapshot" },
+  ];
+
+  for (const matcher of matchers) {
+    if (matcher.re.test(normalized)) {
+      return EMBEDDED_DEFINITIONS[matcher.key] || null;
+    }
+  }
+  return null;
+}
+
+function getRepresentativeColumn(base) {
+  const entries = state.metricMap.get(base);
+  if (!entries || !entries.length) return null;
+  return entries[entries.length - 1].column;
+}
+
+async function loadDefinitions() {
+  state.definitions.clear();
+  const sources = [
+    "ipeds-definitions.csv",
+    "ipeds-definitions.json",
+    "ipeds-vartable.csv",
+  ];
+  for (const source of sources) {
+    try {
+      const res = await fetch(source, { cache: "no-store" });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (source.endsWith(".json")) {
+        const data = JSON.parse(text);
+        data.forEach((row) => {
+          const key = row.variable || row.VARTITLE || row.name;
+          const textValue = row.definition || row.VARDESC || row.description;
+          if (key && textValue) {
+            addDefinition(key, String(textValue).trim(), row.source || "IPEDS data dictionary");
+          }
+        });
+      } else {
+        const { header, rows } = parseCSV(text);
+        const metricGroupCol =
+          header.find((h) => /^metric_group$/i.test(h)) || null;
+        const colKey =
+          header.find((h) => /VARTITLE|variable|name|metric_group/i.test(h)) ||
+          header[0];
+        const colDef =
+          header.find((h) => /VARDESC|definition|description/i.test(h)) ||
+          header[1];
+        const colSource = header.find((h) => /^source$/i.test(h)) || null;
+        rows.forEach((row) => {
+          const key = row[metricGroupCol || colKey];
+          const textValue = row[colDef];
+          if (key && textValue) {
+            addDefinition(
+              key,
+              String(textValue).trim(),
+              (colSource && row[colSource]) || "IPEDS data dictionary"
+            );
+          }
+        });
+      }
+      break;
+    } catch (err) {
+      // ignore and try next source
+    }
+  }
+}
+
+function addDefinition(key, text, source) {
+  const def = { text, source };
+  state.definitions.set(key, def);
+  state.definitions.set(normalizeMetricKey(key), def);
+
+  const aliasMap = {
+    "admission rate": ["percent admitted - total"],
+    "admissions yield": ["admissions yield - total"],
+    applications: ["applications"],
+    admissions: ["admissions"],
+    enrolled: ["enrolled"],
+    "enrollment total": ["enrollment total", "total enrollment"],
+    "full time retention rate": ["full-time retention rate"],
+    "graduation rate bachelor degree within 6 years": [
+      "graduation rate - bachelor degree within 6 years total",
+    ],
+    "graduation rate bachelor degree within 4 years": [
+      "graduation rate - bachelor degree within 4 years total",
+    ],
+    "graduation rate bachelor degree within 5 years": [
+      "graduation rate - bachelor degree within 5 years total",
+    ],
+    "percent receiving pell grant": ["percent receiving pell grant"],
+    "average amount of pell grant aid": [
+      "average amount of pell grant aid",
+      "average amount of pell grant aid awarded to full-time first-time undergraduates",
+    ],
+    "average amount of student loans": [
+      "average amount of student loans",
+      "average amount of student loans awarded to full-time first-time undergraduates",
+    ],
+    "student faculty ratio": ["student-faculty ratio", "student faculty ratio"],
+    "scorecard median earnings 6 years after entry latest snapshot": [
+      "scorecard median earnings 6 years after entry latest snapshot",
+    ],
+    "scorecard median earnings 10 years after entry latest snapshot": [
+      "scorecard median earnings 10 years after entry latest snapshot",
+    ],
+  };
+
+  const normalizedKey = normalizeMetricKey(key);
+  const aliases = aliasMap[normalizedKey] || [];
+  aliases.forEach((alias) => {
+    state.definitions.set(normalizeMetricKey(alias), def);
+  });
+}
+
+function normalizeMetricKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
