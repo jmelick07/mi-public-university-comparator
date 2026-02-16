@@ -129,6 +129,10 @@ const EMBEDDED_DEFINITIONS = {
     text: "Average federal loan dollars among student loan recipients.",
     source: "IPEDS SFA (LOAN_A / FLOAN_A / UFLOANA)",
   },
+  "average net price students awarded grant or scholarship aid": {
+    text: "Average annual net price for full-time, first-time degree or certificate-seeking undergraduates who were awarded grant or scholarship aid.",
+    source: "IPEDS SFA Net Price (COST2 / NPIST2)",
+  },
   "student faculty ratio": {
     text: "Student-to-faculty ratio reported by the institution.",
     source: "IPEDS EF (STUFACR)",
@@ -1062,6 +1066,7 @@ function getEmbeddedDefinition(base) {
     { re: /\bpercent receiving pell grant\b/, key: "percent receiving pell grant" },
     { re: /\baverage amount of pell grant aid\b/, key: "average amount of pell grant aid" },
     { re: /\baverage amount of student loans\b/, key: "average amount of student loans" },
+    { re: /\baverage net price students awarded grant or scholarship aid\b/, key: "average net price students awarded grant or scholarship aid" },
     { re: /\bstudent faculty ratio\b|\bstudent-faculty ratio\b/, key: "student faculty ratio" },
     { re: /\bmedian earnings 6 years after entry\b/, key: "scorecard median earnings 6 years after entry latest snapshot" },
     { re: /\bmedian earnings 10 years after entry\b/, key: "scorecard median earnings 10 years after entry latest snapshot" },
@@ -1162,6 +1167,10 @@ function addDefinition(key, text, source) {
     "average amount of student loans": [
       "average amount of student loans",
       "average amount of student loans awarded to full-time first-time undergraduates",
+    ],
+    "average net price students awarded grant or scholarship aid": [
+      "average net price students awarded grant or scholarship aid",
+      "average net price-students awarded grant or scholarship aid",
     ],
     "student faculty ratio": ["student-faculty ratio", "student faculty ratio"],
     "scorecard median earnings 6 years after entry latest snapshot": [

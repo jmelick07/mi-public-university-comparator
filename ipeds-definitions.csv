@@ -13,6 +13,5 @@ Percent Receiving Pell Grant,Percent of relevant students receiving Pell Grant a
 Average Amount of Pell Grant Aid,Average Pell Grant dollars among Pell recipients.,IPEDS SFA (PGRNT_A / UPGRNTA)
 Average Amount of Student Loans,Average federal loan dollars among student loan recipients.,IPEDS SFA (LOAN_A / FLOAN_A / UFLOANA)
 Student-Faculty Ratio,Student-to-faculty ratio reported by the institution.,IPEDS EF (STUFACR)
-Median Earnings 6 Years After Entry Latest Snapshot,Latest non-suppressed median earnings for former students measured 6 years after entry.,College Scorecard MERGED files (MD_EARN_WNE_P6)
-Median Earnings 10 Years After Entry Latest Snapshot,Latest non-suppressed median earnings for former students measured 10 years after entry.,College Scorecard MERGED files (MD_EARN_WNE_P10)
-Average net price-students awarded grant or scholarship aid,"Average net price for full-time, first-time degree or certificate-seeking undergraduates who were awarded grant or scholarship aid (federal, state or local governments, or the institution).",IPEDS Data Center COST2 (2023-24 from COST2_2024); prior years aligned to IPEDS SFA net price series
+Scorecard Median Earnings 6 Years After Entry Latest Snapshot,Latest non-suppressed median earnings for former students measured 6 years after entry.,College Scorecard MERGED files (MD_EARN_WNE_P6)
+Scorecard Median Earnings 10 Years After Entry Latest Snapshot,Latest non-suppressed median earnings for former students measured 10 years after entry.,College Scorecard MERGED files (MD_EARN_WNE_P10)
