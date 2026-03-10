@@ -11,11 +11,72 @@ const chartSubtitle = document.getElementById("chartSubtitle");
 const institutionList = document.getElementById("institutionList");
 const selectAllBtn = document.getElementById("selectAllBtn");
 const selectNoneBtn = document.getElementById("selectNoneBtn");
+const yearsAllBtn = document.getElementById("yearsAllBtn");
+const yearsNoneBtn = document.getElementById("yearsNoneBtn");
+const yearList = document.getElementById("yearList");
 const definitionTitle = document.getElementById("definitionTitle");
 const definitionBody = document.getElementById("definitionBody");
 const definitionSource = document.getElementById("definitionSource");
+const performanceTabBtn = document.getElementById("performanceTabBtn");
+const appropriationTabBtn = document.getElementById("appropriationTabBtn");
+const performancePanel = document.getElementById("performancePanel");
+const appropriationPanel = document.getElementById("appropriationPanel");
+const appropriationMetricSelect = document.getElementById("appropriationMetricSelect");
+const appropriationInstitutionList = document.getElementById("appropriationInstitutionList");
+const appropriationSelectAllBtn = document.getElementById("appropriationSelectAllBtn");
+const appropriationSelectNoneBtn = document.getElementById("appropriationSelectNoneBtn");
+const appropriationYearsAllBtn = document.getElementById("appropriationYearsAllBtn");
+const appropriationYearsNoneBtn = document.getElementById("appropriationYearsNoneBtn");
+const appropriationYearList = document.getElementById("appropriationYearList");
+const appropriationStatus = document.getElementById("appropriationStatus");
+const appropriationDefinitionTitle = document.getElementById("appropriationDefinitionTitle");
+const appropriationDefinitionBody = document.getElementById("appropriationDefinitionBody");
+const appropriationDefinitionSource = document.getElementById("appropriationDefinitionSource");
+const appropriationChart = document.getElementById("appropriationChart");
+const appropriationTooltip = document.getElementById("appropriationTooltip");
+const appropriationChartTitle = document.getElementById("appropriationChartTitle");
+const appropriationChartSubtitle = document.getElementById("appropriationChartSubtitle");
+const appropriationTable = document.getElementById("appropriationTable");
 const DEFAULT_CSV_URL =
-  "https://github.com/jmelick07/mi-public-university-comparator/blob/main/ipeds_mi_public_10yr_metrics_wide_comparator_clean.csv";
+  "IPEDS_MI_public_10yr/ipeds_mi_public_10yr_metrics_wide_comparator_clean.csv";
+const APPROPRIATION_SOURCES = [
+  {
+    key: "appropriations",
+    label: "State appropriations",
+    file: "../Appropiations Data/Appropiations.csv",
+    format: "currency",
+    definition:
+      "Annual state appropriation amounts for each Michigan public university.",
+    source: "Michigan historical appropriation file",
+  },
+  {
+    key: "appropriation_per_fyes",
+    label: "Appropriation per FYES",
+    file: "../Appropiations Data/Appropiation per FYES.csv",
+    format: "currency",
+    definition:
+      "State appropriations divided by fiscal-year-equated students, showing appropriation support per FYES.",
+    source: "Michigan historical appropriation file",
+  },
+  {
+    key: "fyes",
+    label: "FYES",
+    file: "../Appropiations Data/FYES.csv",
+    format: "number",
+    definition:
+      "Fiscal-year-equated students used in the state appropriation framework.",
+    source: "Michigan historical appropriation file",
+  },
+  {
+    key: "percent_of_state_average",
+    label: "% of state average",
+    file: "../Appropiations Data/% of State Average.csv",
+    format: "percent",
+    definition:
+      "Each institution's appropriation per FYES expressed as a percent of the state average.",
+    source: "Michigan historical appropriation file",
+  },
+];
 
 const state = {
   header: [],
@@ -24,9 +85,19 @@ const state = {
   metrics: [],
   selectedBase: "",
   selectedInstitutions: new Set(),
+  selectedYears: new Set(),
   hoverSeries: null,
   lastChart: null,
   definitions: new Map(),
+};
+
+const appropriationState = {
+  datasets: new Map(),
+  selectedMetric: "",
+  selectedInstitutions: new Set(),
+  selectedYears: new Set(),
+  hoverSeries: null,
+  lastChart: null,
 };
 
 const SCHOOL_COLORS = {
@@ -63,6 +134,31 @@ const SCHOOL_CODES = {
   "University of Michigan-Flint": "UM-F",
   "Wayne State University": "WSU",
   "Western Michigan University": "WMU",
+};
+
+const CODE_TO_SCHOOL = Object.fromEntries(
+  Object.entries(SCHOOL_CODES).map(([name, code]) => [code, name])
+);
+
+const INSTITUTION_ALIASES = {
+  CMU: "Central Michigan University",
+  EMU: "Eastern Michigan University",
+  Ferris: "Ferris State University",
+  GVSU: "Grand Valley State University",
+  LSSU: "Lake Superior State University",
+  MSU: "Michigan State University",
+  MTU: "Michigan Technological University",
+  NMU: "Northern Michigan University",
+  OU: "Oakland University",
+  SVSU: "Saginaw Valley State University",
+  "UM A": "University of Michigan-Ann Arbor",
+  "UM-AA": "University of Michigan-Ann Arbor",
+  "UM D": "University of Michigan-Dearborn",
+  "UM-D": "University of Michigan-Dearborn",
+  "UM F": "University of Michigan-Flint",
+  "UM-F": "University of Michigan-Flint",
+  WSU: "Wayne State University",
+  WMU: "Western Michigan University",
 };
 
 const FALLBACK_COLORS = [
@@ -157,6 +253,7 @@ loadBtn.addEventListener("click", () => {
 
 metricSelect.addEventListener("change", () => {
   state.selectedBase = metricSelect.value;
+  state.selectedYears = getDefaultPerformanceYears(state.selectedBase);
   updateDefinition();
   renderAll();
 });
@@ -175,16 +272,89 @@ selectNoneBtn.addEventListener("click", () => {
   renderAll();
 });
 
+yearsAllBtn.addEventListener("click", () => {
+  state.selectedYears = getAllPerformanceYears(state.selectedBase);
+  renderPerformanceYearList();
+  renderAll();
+});
+
+yearsNoneBtn.addEventListener("click", () => {
+  state.selectedYears.clear();
+  renderPerformanceYearList();
+  renderAll();
+});
+
+appropriationMetricSelect.addEventListener("change", () => {
+  appropriationState.selectedMetric = appropriationMetricSelect.value;
+  const dataset = getSelectedAppropriationDataset();
+  appropriationState.selectedYears = getDefaultAppropriationYears(dataset);
+  renderAppropriationAll();
+});
+
+appropriationSelectAllBtn.addEventListener("click", () => {
+  const dataset = getSelectedAppropriationDataset();
+  if (!dataset) return;
+  appropriationState.selectedInstitutions = new Set(dataset.rows.map((row) => row.name));
+  updateAppropriationInstitutionChecks();
+  renderAppropriationAll();
+});
+
+appropriationSelectNoneBtn.addEventListener("click", () => {
+  appropriationState.selectedInstitutions.clear();
+  updateAppropriationInstitutionChecks();
+  renderAppropriationAll();
+});
+
+appropriationYearsAllBtn.addEventListener("click", () => {
+  const dataset = getSelectedAppropriationDataset();
+  if (!dataset) return;
+  appropriationState.selectedYears = new Set(dataset.years);
+  renderAppropriationYearList();
+  renderAppropriationAll();
+});
+
+appropriationYearsNoneBtn.addEventListener("click", () => {
+  appropriationState.selectedYears.clear();
+  renderAppropriationYearList();
+  renderAppropriationAll();
+});
+
+performanceTabBtn.addEventListener("click", () => setActiveTab("performance"));
+appropriationTabBtn.addEventListener("click", () => setActiveTab("appropriation"));
+
 trendChart.addEventListener("mousemove", throttle(onChartHover, 30));
 trendChart.addEventListener("mouseleave", () => {
   state.hoverSeries = null;
   chartTooltip.style.display = "none";
   if (state.lastChart) drawChart(trendChart, state.lastChart.years, state.lastChart.series);
 });
+appropriationChart.addEventListener(
+  "mousemove",
+  throttle(onAppropriationChartHover, 30)
+);
+appropriationChart.addEventListener("mouseleave", () => {
+  appropriationState.hoverSeries = null;
+  appropriationTooltip.style.display = "none";
+  if (appropriationState.lastChart) {
+    drawAppropriationChart(
+      appropriationChart,
+      appropriationState.lastChart.years,
+      appropriationState.lastChart.series
+    );
+  }
+});
 window.addEventListener("resize", () => {
   if (state.lastChart) drawChart(trendChart, state.lastChart.years, state.lastChart.series);
+  if (appropriationState.lastChart) {
+    drawAppropriationChart(
+      appropriationChart,
+      appropriationState.lastChart.years,
+      appropriationState.lastChart.series
+    );
+  }
 });
 autoLoadFromDefaultSource();
+loadAppropriationData();
 
 function setStatus(message, isError = false) {
   loadStatus.textContent = message;
@@ -212,6 +382,11 @@ async function loadCSVFromUrl(url) {
     const text = await response.text();
     initializeDataset(text);
   } catch (err) {
+    const bundled = window.BUNDLED_DATA?.defaultIpedCsv;
+    if (bundled) {
+      initializeDataset(bundled);
+      return;
+    }
     setStatus(
       "Auto-load failed. Use the file picker to load a CSV manually.",
       true
@@ -220,33 +395,72 @@ async function loadCSVFromUrl(url) {
 }
 
 function initializeDataset(text) {
-  const { header, rows } = parseCSV(text);
-  if (!header.length) {
-    setStatus("CSV appears empty or unreadable.", true);
-    return;
+  try {
+    const { header, rows } = parseCSV(text);
+    if (!header.length) {
+      setStatus("CSV appears empty or unreadable.", true);
+      return;
+    }
+
+    state.header = header;
+    state.rows = rows;
+    state.metricMap = buildMetricMap(header);
+    state.metrics = Array.from(state.metricMap.keys()).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    state.selectedInstitutions = new Set(
+      rows.map((row) => getInstitutionName(row)).filter(Boolean)
+    );
+
+    populateMetricSelect();
+    metricSelect.disabled = false;
+    sortSelect.disabled = false;
+
+    state.selectedBase = state.metrics[0] || "";
+    if (state.selectedBase) {
+      metricSelect.value = state.selectedBase;
+      state.selectedYears = getDefaultPerformanceYears(state.selectedBase);
+    }
+
+    setStatus(
+      `Loaded ${rows.length} institutions and ${state.metrics.length} metric groups.`
+    );
+
+    try {
+      renderInstitutionList();
+      renderPerformanceYearList();
+    } catch (renderErr) {
+      setStatus(
+        `Loaded dataset, but institution toggles failed: ${renderErr.message || renderErr}`,
+        true
+      );
+      return;
+    }
+
+    try {
+      renderTable();
+    } catch (renderErr) {
+      setStatus(
+        `Loaded dataset, but the comparison table failed: ${renderErr.message || renderErr}`,
+        true
+      );
+      return;
+    }
+
+    try {
+      renderChart();
+    } catch (renderErr) {
+      setStatus(
+        `Loaded dataset, but the chart failed: ${renderErr.message || renderErr}`,
+        true
+      );
+      return;
+    }
+
+    loadDefinitions().finally(updateDefinition);
+  } catch (err) {
+    setStatus(`Failed to initialize dataset: ${err.message || err}`, true);
   }
-  state.header = header;
-  state.rows = rows;
-  state.metricMap = buildMetricMap(header);
-  state.metrics = Array.from(state.metricMap.keys()).sort((a, b) =>
-    a.localeCompare(b)
-  );
-  state.selectedInstitutions = new Set(rows.map((row) => row.instnm));
-
-  populateMetricSelect();
-  renderInstitutionList();
-
-  metricSelect.disabled = false;
-  sortSelect.disabled = false;
-
-  state.selectedBase = state.metrics[0] || "";
-  metricSelect.value = state.selectedBase;
-  loadDefinitions().finally(updateDefinition);
-
-  setStatus(
-    `Loaded ${rows.length} institutions and ${state.metrics.length} metric groups.`
-  );
-  renderAll();
 }
 
 function toRawGitHubUrl(url) {
@@ -258,6 +472,11 @@ function toRawGitHubUrl(url) {
 }
 
 function autoLoadFromDefaultSource() {
+  const bundled = window.BUNDLED_DATA?.defaultIpedCsv;
+  if (bundled) {
+    initializeDataset(bundled);
+    return;
+  }
   if (!DEFAULT_CSV_URL) return;
   loadCSVFromUrl(DEFAULT_CSV_URL);
 }
@@ -322,6 +541,18 @@ function parseCSV(text) {
   return { header, rows: normalized };
 }
 
+function getInstitutionName(row) {
+  if (!row || typeof row !== "object") return "";
+  return (
+    row.instnm ||
+    row.INSTNM ||
+    row.Institution ||
+    row.institution ||
+    Object.values(row).find((value) => String(value || "").trim()) ||
+    ""
+  );
+}
+
 function buildMetricMap(header) {
   const map = new Map();
   header.forEach((col) => {
@@ -381,6 +612,47 @@ function parseMetricColumn(col) {
   return { base, year };
 }
 
+function getAllPerformanceYears(base) {
+  const entries = state.metricMap.get(base) || [];
+  const years = entries
+    .map((entry) => entry.year)
+    .filter((year) => year)
+    .sort((a, b) => a - b);
+  return new Set(years);
+}
+
+function getDefaultPerformanceYears(base) {
+  return getAllPerformanceYears(base);
+}
+
+function renderPerformanceYearList() {
+  if (!yearList) return;
+  const years = Array.from(getAllPerformanceYears(state.selectedBase));
+  yearList.innerHTML = "";
+  years.forEach((year) => {
+    const label = document.createElement("label");
+    label.className = "year-item";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = state.selectedYears.has(year);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) state.selectedYears.add(year);
+      else state.selectedYears.delete(year);
+      label.classList.toggle("selected", checkbox.checked);
+      renderAll();
+    });
+
+    const textNode = document.createElement("span");
+    textNode.textContent = String(year);
+
+    label.classList.toggle("selected", checkbox.checked);
+    label.appendChild(checkbox);
+    label.appendChild(textNode);
+    yearList.appendChild(label);
+  });
+}
+
 function populateMetricSelect() {
   metricSelect.innerHTML = "";
   state.metrics.forEach((metric) => {
@@ -393,7 +665,10 @@ function populateMetricSelect() {
 
 function renderInstitutionList() {
   institutionList.innerHTML = "";
-  const names = state.rows.map((row) => row.instnm).sort((a, b) => a.localeCompare(b));
+  const names = state.rows
+    .map((row) => getInstitutionName(row))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
   names.forEach((name) => {
     const label = document.createElement("label");
     label.className = "institution-item";
@@ -414,7 +689,7 @@ function renderInstitutionList() {
 
     const code = document.createElement("span");
     code.className = "institution-code";
-    code.textContent = SCHOOL_CODES[name] || name;
+    code.textContent = displayInstitutionCode(name);
 
     label.title = name;
     label.classList.toggle("selected", checkbox.checked);
@@ -438,6 +713,11 @@ function updateInstitutionChecks() {
 }
 
 function renderAll() {
+  if (!state.selectedBase && state.metrics.length) {
+    state.selectedBase = state.metrics[0];
+    metricSelect.value = state.selectedBase;
+  }
+  renderPerformanceYearList();
   renderTable();
   renderChart();
 }
@@ -447,20 +727,21 @@ function renderTable() {
   if (!base) return;
 
   const entries = state.metricMap.get(base) || [];
-  const years = entries
+  const allYears = entries
     .map((entry) => entry.year)
     .filter((year) => year)
     .sort((a, b) => a - b);
+  const years = allYears.filter((year) => state.selectedYears.has(year));
 
   const rows = state.rows
-    .filter((row) => state.selectedInstitutions.has(row.instnm))
+    .filter((row) => state.selectedInstitutions.has(getInstitutionName(row)))
     .map((row) => {
       const valuesByYear = {};
       entries.forEach((entry) => {
         valuesByYear[entry.year || "Unknown"] = row[entry.column] ?? "";
       });
       return {
-        name: row.instnm || "Unknown",
+        name: getInstitutionName(row) || "Unknown",
         valuesByYear,
       };
     });
@@ -505,22 +786,23 @@ function renderChart() {
   if (!base) return;
 
   const entries = state.metricMap.get(base) || [];
-  const years = entries
+  const allYears = entries
     .map((entry) => entry.year)
     .filter((year) => year)
     .sort((a, b) => a - b);
+  const years = allYears.filter((year) => state.selectedYears.has(year));
 
   chartTitle.textContent = base;
   chartSubtitle.textContent = years.length
-    ? `Years: ${years.join(" – ")}`
+    ? `${years.length} years selected`
     : "No year data";
 
   const series = state.rows
-    .filter((row) => state.selectedInstitutions.has(row.instnm))
+    .filter((row) => state.selectedInstitutions.has(getInstitutionName(row)))
     .map((row) => {
       const values = entries.map((entry) => parseValue(row[entry.column]));
       return {
-        name: row.instnm || "Unknown",
+        name: getInstitutionName(row) || "Unknown",
         values,
       };
     });
@@ -548,7 +830,7 @@ function drawChart(canvas, years, series) {
     return;
   }
 
-  const padding = { top: 24, right: 24, bottom: 40, left: 48 };
+  const padding = { top: 20, right: 24, bottom: 54, left: 64 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
@@ -677,7 +959,7 @@ function onChartHover(event) {
     if (state.lastChart) drawChart(trendChart, state.lastChart.years, state.lastChart.series);
 
     const name = series[closest.sIdx].name;
-    const code = SCHOOL_CODES[name] || name;
+    const code = displayInstitutionCode(name);
     const tooltipText = `${code} • ${closest.year}: ${formatValue(
       closest.value,
       state.selectedBase,
@@ -820,7 +1102,7 @@ function onBarChartHover(event) {
     if (state.lastChart) drawChart(trendChart, state.lastChart.years, state.lastChart.series);
 
     const name = series[closest.sIdx].name;
-    const code = SCHOOL_CODES[name] || name;
+    const code = displayInstitutionCode(name);
     const tooltipText = `${code} • ${closest.year}: ${formatValue(
       closest.value,
       state.selectedBase,
@@ -908,10 +1190,21 @@ function formatValue(value, base, opts = {}) {
   return num.toLocaleString();
 }
 
+function resolveInstitutionName(name) {
+  const value = String(name || "").trim();
+  return INSTITUTION_ALIASES[value] || CODE_TO_SCHOOL[value] || value;
+}
+
 function colorForInstitution(name) {
-  if (SCHOOL_COLORS[name]) return SCHOOL_COLORS[name];
-  const index = Math.abs(hashString(name)) % FALLBACK_COLORS.length;
+  const resolved = resolveInstitutionName(name);
+  if (SCHOOL_COLORS[resolved]) return SCHOOL_COLORS[resolved];
+  const index = Math.abs(hashString(String(resolved))) % FALLBACK_COLORS.length;
   return FALLBACK_COLORS[index];
+}
+
+function displayInstitutionCode(name) {
+  const resolved = resolveInstitutionName(name);
+  return SCHOOL_CODES[resolved] || String(name || "").trim();
 }
 
 function hashString(value) {
@@ -1185,6 +1478,660 @@ function addDefinition(key, text, source) {
   const aliases = aliasMap[normalizedKey] || [];
   aliases.forEach((alias) => {
     state.definitions.set(normalizeMetricKey(alias), def);
+  });
+}
+
+function setActiveTab(tab) {
+  const showPerformance = tab === "performance";
+  performanceTabBtn.classList.toggle("active", showPerformance);
+  appropriationTabBtn.classList.toggle("active", !showPerformance);
+  performanceTabBtn.setAttribute("aria-selected", String(showPerformance));
+  appropriationTabBtn.setAttribute("aria-selected", String(!showPerformance));
+  performancePanel.hidden = !showPerformance;
+  appropriationPanel.hidden = showPerformance;
+  performancePanel.classList.toggle("active", showPerformance);
+  appropriationPanel.classList.toggle("active", !showPerformance);
+
+  if (showPerformance && state.lastChart) {
+    drawChart(trendChart, state.lastChart.years, state.lastChart.series);
+  }
+  if (!showPerformance && appropriationState.lastChart) {
+    drawAppropriationChart(
+      appropriationChart,
+      appropriationState.lastChart.years,
+      appropriationState.lastChart.series
+    );
+  }
+}
+
+function setAppropriationStatus(message, isError = false) {
+  appropriationStatus.textContent = message;
+  appropriationStatus.style.color = isError ? "#a13e2d" : "";
+}
+
+async function loadAppropriationData() {
+  setAppropriationStatus("Loading appropriation datasets...");
+  appropriationState.datasets.clear();
+
+  for (const source of APPROPRIATION_SOURCES) {
+    try {
+      const response = await fetch(encodeURI(source.file), { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      const dataset = buildAppropriationDataset(source, text);
+      appropriationState.datasets.set(source.key, dataset);
+    } catch (err) {
+      const bundledMap = {
+        appropriations: window.BUNDLED_DATA?.appropriations,
+        appropriation_per_fyes: window.BUNDLED_DATA?.appropriationPerFyes,
+        fyes: window.BUNDLED_DATA?.fyes,
+        percent_of_state_average: window.BUNDLED_DATA?.percentOfStateAverage,
+      };
+      const bundled = bundledMap[source.key];
+      if (bundled) {
+        const dataset = buildAppropriationDataset(source, bundled);
+        appropriationState.datasets.set(source.key, dataset);
+        continue;
+      }
+      setAppropriationStatus(
+        `Unable to load ${source.label}. Check that the CSV exists in the Appropiations Data folder.`,
+        true
+      );
+      return;
+    }
+  }
+
+  const firstDataset = APPROPRIATION_SOURCES
+    .map((item) => appropriationState.datasets.get(item.key))
+    .find(Boolean);
+  if (!firstDataset) {
+    setAppropriationStatus("No appropriation data found.", true);
+    return;
+  }
+
+  appropriationState.selectedMetric = firstDataset.key;
+  appropriationState.selectedInstitutions = new Set(
+    firstDataset.rows.map((row) => row.name)
+  );
+  appropriationState.selectedYears = getDefaultAppropriationYears(firstDataset);
+
+  populateAppropriationMetricSelect();
+  renderAppropriationInstitutionList();
+  renderAppropriationYearList();
+  appropriationMetricSelect.disabled = false;
+  appropriationMetricSelect.value = appropriationState.selectedMetric;
+  setAppropriationStatus(
+    `Loaded ${appropriationState.datasets.size} appropriation datasets.`
+  );
+  renderAppropriationAll();
+}
+
+function buildAppropriationDataset(source, text) {
+  const { header, rows } = parseCSV(text);
+  const institutionKey =
+    header.find((col) => /^institution$/i.test(col)) || header[0] || "Institution";
+  const years = header.filter((col) => /^\d{4}-\d{2}$/.test(String(col).trim()));
+  const parsedRows = rows
+    .map((row) => {
+      const name = String(row[institutionKey] || "").trim();
+      if (!name) return null;
+      if (source.key === "percent_of_state_average" && /^mi\s*(avg|average)\.?$/i.test(name)) {
+        return null;
+      }
+      const values = years.map((year) => parseValue(row[year]));
+      return { name, values };
+    })
+    .filter(Boolean);
+
+  return {
+    key: source.key,
+    label: source.label,
+    years,
+    rows: parsedRows,
+    format: source.format,
+    definition: source.definition,
+    source: source.source,
+  };
+}
+
+function populateAppropriationMetricSelect() {
+  appropriationMetricSelect.innerHTML = "";
+  APPROPRIATION_SOURCES.forEach((source) => {
+    if (!appropriationState.datasets.has(source.key)) return;
+    const option = document.createElement("option");
+    option.value = source.key;
+    option.textContent = source.label;
+    appropriationMetricSelect.appendChild(option);
+  });
+}
+
+function shortYearLabel(year) {
+  const value = String(year || "").trim();
+  const match = value.match(/(?:19|20)?(\d{2})-(\d{2})/);
+  return match ? `${match[1]}-${match[2]}` : value;
+}
+
+function getDefaultAppropriationYears(dataset) {
+  if (!dataset || !Array.isArray(dataset.years)) return new Set();
+  const years = dataset.years.slice(-10);
+  return new Set(years);
+}
+
+function getSelectedAppropriationDataset() {
+  return appropriationState.datasets.get(appropriationState.selectedMetric) || null;
+}
+
+function renderAppropriationInstitutionList() {
+  const dataset = getSelectedAppropriationDataset();
+  if (!dataset) return;
+
+  appropriationInstitutionList.innerHTML = "";
+  const names = dataset.rows.map((row) => row.name).sort((a, b) => a.localeCompare(b));
+  names.forEach((name) => {
+    const label = document.createElement("label");
+    label.className = "institution-item";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = appropriationState.selectedInstitutions.has(name);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) appropriationState.selectedInstitutions.add(name);
+      else appropriationState.selectedInstitutions.delete(name);
+      label.classList.toggle("selected", checkbox.checked);
+      renderAppropriationAll();
+    });
+
+    const swatch = document.createElement("span");
+    swatch.className = "institution-swatch";
+    swatch.style.backgroundColor = colorForInstitution(name);
+
+    const code = document.createElement("span");
+    code.className = "institution-code";
+    code.textContent = displayInstitutionCode(name);
+
+    label.title = CODE_TO_SCHOOL[name] || name;
+    label.classList.toggle("selected", checkbox.checked);
+    label.appendChild(checkbox);
+    label.appendChild(swatch);
+    label.appendChild(code);
+    appropriationInstitutionList.appendChild(label);
+  });
+}
+
+function updateAppropriationInstitutionChecks() {
+  const items = appropriationInstitutionList.querySelectorAll(".institution-item");
+  items.forEach((item) => {
+    const displayName = item.querySelector(".institution-code")?.textContent || item.title;
+    const checked = appropriationState.selectedInstitutions.has(displayName);
+    const input = item.querySelector("input");
+    input.checked = checked;
+    item.classList.toggle("selected", checked);
+  });
+}
+
+function renderAppropriationYearList() {
+  const dataset = getSelectedAppropriationDataset();
+  if (!dataset) return;
+
+  appropriationYearList.innerHTML = "";
+  dataset.years.forEach((year) => {
+    const label = document.createElement("label");
+    label.className = "year-item";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = appropriationState.selectedYears.has(year);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) appropriationState.selectedYears.add(year);
+      else appropriationState.selectedYears.delete(year);
+      label.classList.toggle("selected", checkbox.checked);
+      renderAppropriationAll();
+    });
+
+    const textNode = document.createElement("span");
+    textNode.textContent = shortYearLabel(year);
+
+    label.classList.toggle("selected", checkbox.checked);
+    label.appendChild(checkbox);
+    label.appendChild(textNode);
+    appropriationYearList.appendChild(label);
+  });
+}
+
+function renderAppropriationAll() {
+  const dataset = getSelectedAppropriationDataset();
+  if (!dataset) return;
+  renderAppropriationDefinition();
+  renderAppropriationInstitutionList();
+  renderAppropriationYearList();
+  renderAppropriationTable();
+  renderAppropriationChart();
+}
+
+function renderAppropriationDefinition() {
+  const dataset = getSelectedAppropriationDataset();
+  if (!dataset) return;
+  appropriationDefinitionTitle.textContent = dataset.label;
+  appropriationDefinitionBody.textContent = dataset.definition;
+  appropriationDefinitionSource.textContent = dataset.source;
+}
+
+function renderAppropriationTable() {
+  const dataset = getSelectedAppropriationDataset();
+  if (!dataset) return;
+
+  const selectedYears = dataset.years.filter((year) =>
+    appropriationState.selectedYears.has(year)
+  );
+  const yearIndexes = selectedYears.map((year) => dataset.years.indexOf(year));
+
+  const thead = appropriationTable.querySelector("thead");
+  const tbody = appropriationTable.querySelector("tbody");
+  thead.innerHTML = "";
+  tbody.innerHTML = "";
+
+  const headerRow = document.createElement("tr");
+  headerRow.innerHTML = `<th>Institution</th>${selectedYears
+    .map((year) => `<th>${year}</th>`)
+    .join("")}`;
+  thead.appendChild(headerRow);
+
+  dataset.rows
+    .filter((row) => appropriationState.selectedInstitutions.has(row.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((row) => {
+      const tr = document.createElement("tr");
+      const cells = yearIndexes
+        .map((index) => formatAppropriationValue(row.values[index], dataset.format, { empty: "-" }))
+        .map((value) => `<td>${value}</td>`)
+        .join("");
+      tr.innerHTML = `<td>${resolveInstitutionName(row.name)}</td>${cells}`;
+      tbody.appendChild(tr);
+    });
+}
+
+function renderAppropriationChart() {
+  const dataset = getSelectedAppropriationDataset();
+  if (!dataset) return;
+
+  const selectedYears = dataset.years.filter((year) =>
+    appropriationState.selectedYears.has(year)
+  );
+  const yearIndexes = selectedYears.map((year) => dataset.years.indexOf(year));
+
+  appropriationChartTitle.textContent = dataset.label;
+  appropriationChartSubtitle.textContent = selectedYears.length
+    ? `${selectedYears.length} years selected`
+    : "No year data selected";
+
+  const series = dataset.rows
+    .filter((row) => appropriationState.selectedInstitutions.has(row.name))
+    .map((row) => ({
+      name: row.name,
+      values: yearIndexes.map((index) => row.values[index]),
+    }));
+
+  appropriationState.lastChart = { years: selectedYears, series };
+  drawAppropriationChart(appropriationChart, selectedYears, series);
+}
+
+function drawAppropriationChart(canvas, years, series) {
+  const ctx = canvas.getContext("2d");
+  const cssWidth = canvas.clientWidth || 1000;
+  const cssHeight = canvas.clientHeight || 320;
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(cssWidth * ratio);
+  canvas.height = Math.floor(cssHeight * ratio);
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  const width = cssWidth;
+  const height = cssHeight;
+  ctx.clearRect(0, 0, width, height);
+
+  if (!years.length || !series.length) {
+    ctx.fillStyle = "#5a6678";
+    ctx.font = "14px Inter, sans-serif";
+    ctx.fillText("No data to display.", 20, 40);
+    return;
+  }
+
+  const padding = { top: 20, right: 24, bottom: 58, left: 78 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const values = series.flatMap((item) => item.values).filter((v) => v > -Infinity);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const nice = niceScale(min, max, 5);
+
+  if (years.length === 1) {
+    drawAppropriationBars(canvas, ctx, years, series, padding, chartWidth, chartHeight, nice);
+    return;
+  }
+
+  ctx.strokeStyle = "#e3d9cc";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding.left, padding.top);
+  ctx.lineTo(padding.left, padding.top + chartHeight);
+  ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+  ctx.stroke();
+
+  ctx.fillStyle = "#5a6678";
+  ctx.font = "12px Inter, sans-serif";
+  const labelStep = Math.max(1, Math.ceil(years.length / 8));
+  years.forEach((year, idx) => {
+    if (idx % labelStep !== 0 && idx !== years.length - 1) return;
+    const x = padding.left + (chartWidth * idx) / (years.length - 1 || 1);
+    ctx.save();
+    ctx.translate(x, padding.top + chartHeight + 18);
+    ctx.rotate(-Math.PI / 6);
+    ctx.fillText(String(year), -18, 0);
+    ctx.restore();
+  });
+
+  const steps = nice.steps;
+  for (let i = 0; i <= steps; i += 1) {
+    const value = nice.max - nice.step * i;
+    const y = padding.top + (chartHeight * i) / steps;
+    ctx.fillText(
+      formatAppropriationValue(value, getSelectedAppropriationDataset()?.format, {
+        numericInput: true,
+      }),
+      6,
+      y + 4
+    );
+    ctx.strokeStyle = "#f0e5d6";
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(padding.left + chartWidth, y);
+    ctx.stroke();
+  }
+
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  series.forEach((item, index) => {
+    const color = colorForInstitution(item.name);
+    const isHover = appropriationState.hoverSeries === index;
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = appropriationState.hoverSeries === null || isHover ? 1 : 0.2;
+    ctx.lineWidth = isHover ? 3 : 2;
+    ctx.beginPath();
+    item.values.forEach((value, valueIndex) => {
+      if (value === -Infinity) return;
+      const x = padding.left + (chartWidth * valueIndex) / (years.length - 1 || 1);
+      const y =
+        padding.top + ((nice.max - value) / (nice.max - nice.min || 1)) * chartHeight;
+      if (valueIndex === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    item.values.forEach((value, valueIndex) => {
+      if (value === -Infinity) return;
+      const x = padding.left + (chartWidth * valueIndex) / (years.length - 1 || 1);
+      const y =
+        padding.top + ((nice.max - value) / (nice.max - nice.min || 1)) * chartHeight;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = appropriationState.hoverSeries === null || isHover ? 1 : 0.2;
+      ctx.beginPath();
+      ctx.arc(x, y, isHover ? 4 : 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
+
+  ctx.globalAlpha = 1;
+  canvas.dataset.mode = "line";
+  canvas.dataset.years = JSON.stringify(years);
+  canvas.dataset.series = JSON.stringify(series.map((item) => ({ name: item.name, values: item.values })));
+  canvas.dataset.min = String(nice.min);
+  canvas.dataset.max = String(nice.max);
+  canvas.dataset.range = String(nice.max - nice.min || 1);
+  canvas.dataset.padding = JSON.stringify(padding);
+}
+
+function drawAppropriationBars(canvas, ctx, years, series, padding, chartWidth, chartHeight, nice) {
+  const bottomY = padding.top + chartHeight;
+  const domain = nice.max - nice.min || 1;
+  const year = years[0];
+
+  ctx.strokeStyle = "#e3d9cc";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding.left, padding.top);
+  ctx.lineTo(padding.left, bottomY);
+  ctx.lineTo(padding.left + chartWidth, bottomY);
+  ctx.stroke();
+
+  ctx.fillStyle = "#5a6678";
+  ctx.font = "12px Inter, sans-serif";
+  for (let i = 0; i <= nice.steps; i += 1) {
+    const value = nice.max - nice.step * i;
+    const y = padding.top + (chartHeight * i) / nice.steps;
+    ctx.fillText(
+      formatAppropriationValue(value, getSelectedAppropriationDataset()?.format, {
+        numericInput: true,
+      }),
+      6,
+      y + 4
+    );
+    ctx.strokeStyle = "#f0e5d6";
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(padding.left + chartWidth, y);
+    ctx.stroke();
+  }
+
+  const valid = series
+    .map((item, index) => ({ item, index, value: item.values[0] }))
+    .filter((row) => row.value !== -Infinity);
+  const slot = chartWidth / Math.max(valid.length, 1);
+  const barWidth = Math.max(8, slot * 0.62);
+  const bars = [];
+
+  valid.forEach((row, idx) => {
+    const xCenter = padding.left + slot * idx + slot / 2;
+    const y = padding.top + ((nice.max - row.value) / domain) * chartHeight;
+    const h = Math.max(1, bottomY - y);
+    const x = xCenter - barWidth / 2;
+    const color = colorForInstitution(row.item.name);
+    const isHover = appropriationState.hoverSeries === row.index;
+
+    ctx.fillStyle = color;
+    ctx.globalAlpha = appropriationState.hoverSeries === null || isHover ? 0.92 : 0.22;
+    ctx.fillRect(x, y, barWidth, h);
+
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = appropriationState.hoverSeries === null || isHover ? 1 : 0.25;
+    ctx.lineWidth = isHover ? 2 : 1;
+    ctx.strokeRect(x, y, barWidth, h);
+
+    ctx.fillStyle = "#5a6678";
+    ctx.globalAlpha = 1;
+    ctx.font = "10px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(displayInstitutionCode(row.item.name), xCenter, bottomY + 14);
+    ctx.textAlign = "left";
+
+    bars.push({
+      sIdx: row.index,
+      year,
+      value: row.value,
+      x,
+      y,
+      w: barWidth,
+      h,
+      centerX: xCenter,
+    });
+  });
+
+  ctx.globalAlpha = 1;
+  canvas.dataset.mode = "bar";
+  canvas.dataset.years = JSON.stringify(years);
+  canvas.dataset.series = JSON.stringify(series.map((item) => ({ name: item.name, values: item.values })));
+  canvas.dataset.bars = JSON.stringify(bars);
+  canvas.dataset.padding = JSON.stringify(padding);
+}
+
+function onAppropriationChartHover(event) {
+  const mode = appropriationChart.dataset.mode || "line";
+  if (mode === "bar") {
+    return onAppropriationBarHover(event);
+  }
+
+  const years = JSON.parse(appropriationChart.dataset.years || "[]");
+  const series = JSON.parse(appropriationChart.dataset.series || "[]");
+  if (!years.length || !series.length) return;
+
+  const padding = JSON.parse(appropriationChart.dataset.padding || "{}");
+  const rect = appropriationChart.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * appropriationChart.width;
+  const y = ((event.clientY - rect.top) / rect.height) * appropriationChart.height;
+  const chartWidth = appropriationChart.width - padding.left - padding.right;
+  const chartHeight = appropriationChart.height - padding.top - padding.bottom;
+  const minVal = parseFloat(appropriationChart.dataset.min || "0");
+  const range = parseFloat(appropriationChart.dataset.range || "1");
+  const yearIndex = Math.round(((x - padding.left) / chartWidth) * (years.length - 1 || 1));
+  const clampedIndex = Math.max(0, Math.min(yearIndex, years.length - 1));
+  const px = padding.left + (chartWidth * clampedIndex) / (years.length - 1 || 1);
+
+  let closest = null;
+  series.forEach((item, index) => {
+    const value = item.values[clampedIndex];
+    if (value === -Infinity) return;
+    const py = padding.top + ((minVal + range - value) / range) * chartHeight;
+    const dist = Math.abs(py - y);
+    if (!closest || dist < closest.dist) {
+      closest = { dist, px, py, index, year: years[clampedIndex], value };
+    }
+  });
+
+  if (closest && closest.dist < 28) {
+    appropriationState.hoverSeries = closest.index;
+    if (appropriationState.lastChart) {
+      drawAppropriationChart(
+        appropriationChart,
+        appropriationState.lastChart.years,
+        appropriationState.lastChart.series
+      );
+    }
+
+    const name = series[closest.index].name;
+    appropriationTooltip.textContent = `${displayInstitutionCode(name)} - ${closest.year}: ${formatAppropriationValue(
+      closest.value,
+      getSelectedAppropriationDataset()?.format,
+      { numericInput: true }
+    )}`;
+    appropriationTooltip.style.display = "block";
+
+    const offsetX = (closest.px / appropriationChart.width) * rect.width;
+    const offsetY = (closest.py / appropriationChart.height) * rect.height;
+    appropriationTooltip.style.left = `${offsetX}px`;
+    appropriationTooltip.style.top = `${offsetY}px`;
+
+    const tooltipRect = appropriationTooltip.getBoundingClientRect();
+    const minLeft = 8;
+    const maxLeft = rect.width - tooltipRect.width - 8;
+    let left = offsetX - tooltipRect.width / 2;
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+
+    let top = offsetY - tooltipRect.height - 12;
+    if (top < 8) top = offsetY + 12;
+    appropriationTooltip.style.transform = `translate(${left - offsetX}px, ${top - offsetY}px)`;
+  } else {
+    appropriationState.hoverSeries = null;
+    appropriationTooltip.style.display = "none";
+    if (appropriationState.lastChart) {
+      drawAppropriationChart(
+        appropriationChart,
+        appropriationState.lastChart.years,
+        appropriationState.lastChart.series
+      );
+    }
+  }
+}
+
+function onAppropriationBarHover(event) {
+  const bars = JSON.parse(appropriationChart.dataset.bars || "[]");
+  const series = JSON.parse(appropriationChart.dataset.series || "[]");
+  if (!bars.length || !series.length) return;
+
+  const rect = appropriationChart.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * appropriationChart.width;
+  const y = ((event.clientY - rect.top) / rect.height) * appropriationChart.height;
+
+  let closest = null;
+  bars.forEach((bar) => {
+    const withinX = x >= bar.x - 6 && x <= bar.x + bar.w + 6;
+    if (!withinX) return;
+    const dist = Math.abs(x - bar.centerX) + Math.abs(y - (bar.y + bar.h * 0.35)) * 0.2;
+    if (!closest || dist < closest.dist) {
+      closest = { ...bar, dist };
+    }
+  });
+
+  if (closest) {
+    appropriationState.hoverSeries = closest.sIdx;
+    if (appropriationState.lastChart) {
+      drawAppropriationChart(
+        appropriationChart,
+        appropriationState.lastChart.years,
+        appropriationState.lastChart.series
+      );
+    }
+
+    const name = series[closest.sIdx].name;
+    appropriationTooltip.textContent = `${displayInstitutionCode(name)} - ${closest.year}: ${formatAppropriationValue(
+      closest.value,
+      getSelectedAppropriationDataset()?.format,
+      { numericInput: true }
+    )}`;
+    appropriationTooltip.style.display = "block";
+
+    const offsetX = (closest.centerX / appropriationChart.width) * rect.width;
+    const offsetY = (closest.y / appropriationChart.height) * rect.height;
+    appropriationTooltip.style.left = `${offsetX}px`;
+    appropriationTooltip.style.top = `${offsetY}px`;
+
+    const tooltipRect = appropriationTooltip.getBoundingClientRect();
+    const minLeft = 8;
+    const maxLeft = rect.width - tooltipRect.width - 8;
+    let left = offsetX - tooltipRect.width / 2;
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+
+    let top = offsetY - tooltipRect.height - 12;
+    if (top < 8) top = offsetY + 10;
+    appropriationTooltip.style.transform = `translate(${left - offsetX}px, ${top - offsetY}px)`;
+  } else {
+    appropriationState.hoverSeries = null;
+    appropriationTooltip.style.display = "none";
+    if (appropriationState.lastChart) {
+      drawAppropriationChart(
+        appropriationChart,
+        appropriationState.lastChart.years,
+        appropriationState.lastChart.series
+      );
+    }
+  }
+}
+
+function formatAppropriationValue(value, format, opts = {}) {
+  const empty = opts.empty ?? "";
+  if (value === null || value === undefined || value === "" || value === -Infinity) {
+    return empty;
+  }
+
+  const num = opts.numericInput === true ? Number(value) : parseValue(value);
+  if (!Number.isFinite(num)) return empty;
+
+  if (format === "currency") {
+    return `$${Math.round(num).toLocaleString()}`;
+  }
+  if (format === "percent") {
+    return `${num.toFixed(2)}%`;
+  }
+  return num.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   });
 }
 
